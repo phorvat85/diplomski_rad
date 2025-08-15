@@ -9,9 +9,12 @@ public class TaskEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(unique = true)
-    private String key;
+    @Column(unique = true, name = "task_key")
+    private String taskKey;
     private String title;
     private String description;
-    private String assignee;
+    @ManyToOne
+    @JoinColumn(name = "assignee_id")
+    private UserEntity assignee;
+    private String estimation;
 }

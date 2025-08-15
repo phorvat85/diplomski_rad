@@ -14,10 +14,10 @@ CREATE TABLE IF NOT EXISTS user_entity (
 
 CREATE TABLE IF NOT EXISTS task_entity (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    `key` VARCHAR(255) NOT NULL UNIQUE,
+    task_key VARCHAR(255) UNIQUE,
     title VARCHAR(50) NOT NULL ,
     description VARCHAR(255) NOT NULL,
-    assignee_id BIGINT,
-    FOREIGN KEY (assignee_id) REFERENCES user_entity(id),
-    estimation VARCHAR(255) NOT NULL,
+    assignee_id BIGINT NULL,
+    FOREIGN KEY (assignee_id) REFERENCES user_entity(id) ON DELETE SET NULL,
+    estimation VARCHAR(255) NOT NULL
 );

@@ -28,6 +28,7 @@ public class AuthService {
 
     public UserEntity register(UserEntity user) {
         user.setPassword(passwordEncoder.encode(user.getPassword()));
+        user.setRole(roleRepository.findById(3L).get());
         userRepository.save(user);
         log.info("Saved user after successful registration: {}", user);
         return user;
@@ -43,8 +44,6 @@ public class AuthService {
 
     public String generateJWTForUser(AuthRequestDTO authRequest) {
         UserEntity user = customUserDetailsService.loadUserByUsername(authRequest.getUsername());
-        RoleEntity defaultRole = roleRepository.findByName("ROLE_WORKER").get();
-        user.setRole(defaultRole);
         return jwtUtil.generateToken(user);
     }
 }

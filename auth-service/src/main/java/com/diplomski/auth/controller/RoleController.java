@@ -23,7 +23,7 @@ public class RoleController {
         return ResponseEntity.ok(roleService.getAllRoles());
     }
 
-    @GetMapping("/role/create")
+    @PostMapping("/role/create")
     public ResponseEntity<?> createRole(@RequestBody RoleEntity role) {
         try {
             roleService.createRole(role);
@@ -33,7 +33,7 @@ public class RoleController {
         }
     }
 
-    @GetMapping("/role/update")
+    @PutMapping("/role/update")
     public ResponseEntity<?> updateRole(@RequestBody RoleEntity role) {
         try {
             roleService.updateRole(role);
@@ -43,10 +43,10 @@ public class RoleController {
         }
     }
 
-    @GetMapping("/role/delete")
-    public ResponseEntity<?> deleteRole(@RequestParam String name) {
+    @DeleteMapping("/role/delete/{id}")
+    public ResponseEntity<?> deleteRole(@PathVariable(name = "id") String id) {
         try {
-            roleService.deleteRole(name);
+            roleService.deleteRole(Long.valueOf(id));
             return ResponseEntity.status(HttpStatus.FOUND).build();
         } catch (ChangeSetPersister.NotFoundException e) {
             return ResponseEntity.notFound().build();

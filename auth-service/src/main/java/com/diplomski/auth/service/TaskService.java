@@ -22,24 +22,27 @@ public class TaskService {
     }
 
     public void createTask(TaskEntity task) throws BadRequestException {
-        if (taskRepository.findByKey(task.getKey()).isEmpty()) {
-            task.setKey(KEY_PREFIX + task.getKey());
+        if (task.getId() == null) {
             taskRepository.save(task);
+            //TODO() Create method in TaskRepository that will fetch task with biggest id so we don't need to fetch all tasks every time.
+            TaskEntity createdTask = taskRepository.findAll().getLast();
+            createdTask.setTaskKey(KEY_PREFIX + createdTask.getId());
+            taskRepository.save(createdTask);
         } else {
             throw new BadRequestException("Task already exists");
         }
     }
 
     public void updateTask(TaskEntity task) throws ChangeSetPersister.NotFoundException {
-        if (taskRepository.findByKey(task.getKey()).isPresent()) {
+        if (taskRepository.findById(String.valueOf(task.getId())).isPresent()) {
             taskRepository.save(task);
         } else {
             throw new ChangeSetPersister.NotFoundException();
         }
     }
 
-    public void deleteTask(String key) throws ChangeSetPersister.NotFoundException {
-        Optional<TaskEntity> task = taskRepository.findByKey(key);
+    public void deleteTask(String id) throws ChangeSetPersister.NotFoundException {
+        Optional<TaskEntity> task = taskRepository.findById(id);
         if (task.isPresent()) {
             taskRepository.delete(task.get());
         } else {

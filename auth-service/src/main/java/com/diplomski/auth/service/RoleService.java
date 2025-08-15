@@ -29,15 +29,15 @@ public class RoleService {
     }
 
     public void updateRole(RoleEntity role) throws ChangeSetPersister.NotFoundException {
-        if (roleRepository.findByName(role.getName()).isPresent()) {
+        if (roleRepository.findById(role.getId()).isPresent()) {
             roleRepository.save(role);
         } else {
             throw new ChangeSetPersister.NotFoundException();
         }
     }
 
-    public void deleteRole(String name) throws ChangeSetPersister.NotFoundException {
-        Optional<RoleEntity> role = roleRepository.findByName(name);
+    public void deleteRole(Long id) throws ChangeSetPersister.NotFoundException {
+        Optional<RoleEntity> role = roleRepository.findById(id);
         if (role.isPresent()) {
             roleRepository.delete(role.get());
         } else {

@@ -7,5 +7,5 @@ VALUES
 
 -- Update key field to "KFK-{id}" for all tasks
 UPDATE task_entity
-SET `key` = CONCAT('KFK-', id)
-WHERE `key` IS NULL;
+SET task_key = CONCAT('KFK-', id)
+WHERE task_key IS NULL;

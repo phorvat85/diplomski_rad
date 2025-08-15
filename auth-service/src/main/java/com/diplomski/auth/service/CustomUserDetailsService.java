@@ -21,7 +21,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     public UserEntity loadUserByUsername(String username) throws UsernameNotFoundException {
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found" + username));
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
     }
 
     public List<UserEntity> getAllUsers() {
@@ -29,25 +29,25 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     public void createUser(UserEntity user) throws BadRequestException {
-        if (userRepository.findByUsername(user.getUsername()).isEmpty()) {
+        if (userRepository.findById(String.valueOf(user.getId())).isEmpty()) {
             userRepository.save(user);
         } else {
-            throw new BadRequestException("Task already exists");
+            throw new BadRequestException("User already exists");
         }
     }
 
     public void updateUser(UserEntity user) throws ChangeSetPersister.NotFoundException {
-        if (userRepository.findByUsername(user.getUsername()).isPresent()) {
+        if (userRepository.findById(String.valueOf(user.getId())).isPresent()) {
             userRepository.save(user);
         } else {
             throw new ChangeSetPersister.NotFoundException();
         }
     }
 
-    public void deleteUser(String username) throws ChangeSetPersister.NotFoundException {
-        Optional<UserEntity> task = userRepository.findByUsername(username);
-        if (task.isPresent()) {
-            userRepository.delete(task.get());
+    public void deleteUser(String id) throws ChangeSetPersister.NotFoundException {
+        Optional<UserEntity> user = userRepository.findById(id);
+        if (user.isPresent()) {
+            userRepository.delete(user.get());
         } else {
             throw new ChangeSetPersister.NotFoundException();
         }

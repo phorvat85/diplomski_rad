@@ -23,7 +23,7 @@ public class UserController {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 
-    @GetMapping("/user/create")
+    @PostMapping("/user/create")
     public ResponseEntity<?> createUser(@RequestBody UserEntity user) {
         try {
             userService.createUser(user);
@@ -33,7 +33,7 @@ public class UserController {
         }
     }
 
-    @GetMapping("/user/update")
+    @PutMapping("/user/update")
     public ResponseEntity<?> updateUser(@RequestBody UserEntity user) {
         try {
             userService.updateUser(user);
@@ -43,10 +43,10 @@ public class UserController {
         }
     }
 
-    @GetMapping("/user/delete")
-    public ResponseEntity<?> deleteUser(@RequestParam String username) {
+    @DeleteMapping("/user/delete/{id}")
+    public ResponseEntity<?> deleteUser(@PathVariable(name = "id") String id) {
         try {
-            userService.deleteUser(username);
+            userService.deleteUser(id);
             return ResponseEntity.status(HttpStatus.FOUND).build();
         } catch (ChangeSetPersister.NotFoundException e) {
             return ResponseEntity.notFound().build();

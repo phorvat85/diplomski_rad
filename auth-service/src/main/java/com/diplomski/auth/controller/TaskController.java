@@ -23,7 +23,7 @@ public class TaskController {
         return ResponseEntity.ok(taskService.getAllTasks());
     }
 
-    @PostMapping("/task/save")
+    @PostMapping("/task/create")
     public ResponseEntity<?> createTask(@RequestBody TaskEntity task) {
         try {
             taskService.createTask(task);
@@ -31,7 +31,6 @@ public class TaskController {
         } catch (BadRequestException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
-
     }
 
     @PutMapping("/task/update")
@@ -44,10 +43,10 @@ public class TaskController {
         }
     }
 
-    @DeleteMapping("/task/delete")
-    public ResponseEntity<?> deleteTask(@RequestParam String key) {
+    @DeleteMapping("/task/delete/{id}")
+    public ResponseEntity<?> deleteTask(@PathVariable(name = "id") String id) {
        try {
-           taskService.deleteTask(key);
+           taskService.deleteTask(id);
            return ResponseEntity.status(HttpStatus.FOUND).build();
        } catch (ChangeSetPersister.NotFoundException e) {
            return ResponseEntity.notFound().build();
