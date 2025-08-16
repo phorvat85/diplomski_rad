@@ -1,0 +1,3 @@
+spring.kafka.bootstrap-servers: kafka:9092
+spring.kafka.topic-name: auth-topic
+spring.kafka.group-id: consumer-service

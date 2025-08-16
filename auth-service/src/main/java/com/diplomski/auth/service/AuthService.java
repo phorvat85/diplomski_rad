@@ -1,6 +1,5 @@
 package com.diplomski.auth.service;
 
-import com.diplomski.auth.entity.RoleEntity;
 import com.diplomski.auth.entity.UserEntity;
 import com.diplomski.auth.repository.RoleRepository;
 import com.diplomski.auth.repository.UserRepository;
