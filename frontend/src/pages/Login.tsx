@@ -1,9 +1,12 @@
 // src/pages/Login.tsx
 import { useForm } from 'react-hook-form'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { login as apiLogin, LoginReq } from '../api/auth'
 import { useAuth } from '../auth/AuthContext'
-import { useNavigate, Link } from 'react-router-dom'
+import { api, setAuthToken } from '../api/client'
 
+// ---- helpers ----
 function decodeJwtPayload<T = any>(token: string): T | null {
   try {
     const payload = token.split('.')[1]
@@ -16,56 +19,113 @@ function decodeJwtPayload<T = any>(token: string): T | null {
   }
 }
 
-// Normalize to one of: ADMIN | MANAGER | WORKER
-function extractRoleFromPayload(payload: any): 'ADMIN' | 'MANAGER' | 'WORKER' {
-  if (!payload) return 'WORKER'
-  // Common Spring claims: authorities, roles, role, scope
-  let raw: any = payload.authorities ?? payload.roles ?? payload.role ?? payload.scope ?? payload.scopes
-
-  // If space-delimited scope string
-  if (typeof raw === 'string' && raw.includes(' ')) raw = raw.split(' ')
-  // If single string, wrap as array
-  if (typeof raw === 'string') raw = [raw]
-  // If object array (rare), map to strings
-  if (Array.isArray(raw)) raw = raw.map((r) => (typeof r === 'string' ? r : r?.authority ?? r?.name ?? String(r)))
-
-  const roles: string[] = Array.isArray(raw) ? raw : []
-  const has = (needle: string) => roles.some(r => r === needle || r === `ROLE_${needle}`)
-  if (has('ADMIN')) return 'ADMIN'
-  if (has('MANAGER')) return 'MANAGER'
-  return 'WORKER'
+function normalizeRoles(input: any): string[] {
+  const arr = Array.isArray(input) ? input : [input]
+  return arr
+    .filter(Boolean)
+    .map((x) => (typeof x === 'string' ? x : (x as any).name ?? (x as any).authority ?? ''))
+    .map((s) => s.replace(/^ROLE_/i, '').toUpperCase())
 }
 
-function extractUsername(payload: any, fallback: string): string {
-  // Common JWT fields: sub, username
-  return payload?.username ?? payload?.sub ?? fallback
+function normalizeUser(u: any, jwtPayload?: any) {
+  // prefer server fields, fall back to JWT username/sub, never use numeric id as username
+  const rawUsername =
+    u?.username ?? u?.userName ?? u?.name ?? jwtPayload?.username ?? jwtPayload?.sub ?? ''
+  const username =
+    typeof rawUsername === 'number'
+      ? ''
+      : String(rawUsername || '').trim()
+  const safeUsername =
+    username && /^\d+$/.test(username) && String(u?.id ?? '') === username ? '' : username
+
+  const email = String(u?.email ?? u?.emailAddress ?? '').trim()
+
+  // keep whatever "role" shape the backend uses, but also provide a normalized array
+  const roleObj =
+    u?.role && typeof u.role === 'object'
+      ? u.role
+      : u?.role
+      ? { name: String(u.role) }
+      : undefined
+
+  const rolesFromJwt = normalizeRoles(
+    jwtPayload?.authorities ?? jwtPayload?.roles ?? jwtPayload?.role ?? jwtPayload?.scope ?? jwtPayload?.scopes ?? []
+  )
+  const rolesFromUser = normalizeRoles(u?.roles ?? (roleObj?.name ? [roleObj.name] : []))
+
+  return {
+    ...u,
+    username: safeUsername || email || String(u?.id ?? ''), // sensible display fallback
+    email,
+    role: roleObj ?? (rolesFromUser[0] ? { name: `ROLE_${rolesFromUser[0]}` } : undefined),
+    roles: rolesFromUser.length ? rolesFromUser : rolesFromJwt,
+  }
 }
 
+// ---- component ----
 export default function Login() {
   const { register, handleSubmit } = useForm<LoginReq>()
   const { login } = useAuth()
-  const nav = useNavigate()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const qc = useQueryClient()
 
-  async function onSubmit(values: LoginReq) {
-    const res = await apiLogin(values) // typically returns { token }
-    const payload = decodeJwtPayload(res.token)
-    const role = extractRoleFromPayload(payload)
-    const username = extractUsername(payload, values.username)
+  const onSubmit = async (values: LoginReq) => {
+    try {
+      // 1) authenticate → token
+      const res = await apiLogin(values) // expect { token }
+      const token: string = res?.token ?? res?.accessToken ?? res?.jwt
+      if (!token) throw new Error('No token returned from /auth/login')
 
-    // Store normalized user with correct role
-    login(res.token, { id: 'me', username, role })
+      // 2) prime Authorization so the next call uses it
+      setAuthToken(token)
 
-    nav('/') // go home; navbar will now show Manager/Admin if applicable
+      // 3) fetch authoritative user from the backend
+      const payload = decodeJwtPayload(token)
+      const meResp = await api.get('/worker/user/me')
+      const me = normalizeUser(meResp.data, payload)
+
+      // 4) persist auth (AuthContext + localStorage via login)
+      login(token, me)
+
+      // 5) seed React Query cache so header/profile are instant
+      qc.setQueryData(['me'], me)
+
+      // 6) go where user intended (or home)
+      const to = (location.state as any)?.from?.pathname ?? '/'
+      navigate(to, { replace: true })
+    } catch (err: any) {
+      // optional: show error to user; keep your existing UX
+      // eslint-disable-next-line no-alert
+      alert(err?.response?.data?.message || err?.message || 'Login failed.')
+    }
   }
 
   return (
-    <div className="grid place-items-center min-h-dvh">
-      <form onSubmit={handleSubmit(onSubmit)} className="bg-white p-6 rounded-xl border w-full max-w-sm space-y-4">
+    <div className="grid min-h-dvh place-items-center">
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="w-full max-w-sm space-y-4 rounded-xl border bg-white p-6"
+      >
         <h1 className="text-xl font-semibold">Login</h1>
-        <input {...register('username')} placeholder="Username" className="w-full border rounded px-3 py-2" />
-        <input {...register('password')} type="password" placeholder="Password" className="w-full border rounded px-3 py-2" />
-        <button className="w-full bg-black text-white rounded px-3 py-2">Sign in</button>
-        <p className="text-sm text-slate-600">No account? <Link to="/register" className="underline">Register</Link></p>
+        <input
+          {...register('username')}
+          placeholder="Username"
+          className="w-full rounded border px-3 py-2"
+        />
+        <input
+          {...register('password')}
+          type="password"
+          placeholder="Password"
+          className="w-full rounded border px-3 py-2"
+        />
+        <button className="w-full rounded bg-black px-3 py-2 text-white">Sign in</button>
+        <p className="text-sm text-slate-600">
+          No account?{' '}
+          <Link to="/register" className="underline">
+            Register
+          </Link>
+        </p>
       </form>
     </div>
   )

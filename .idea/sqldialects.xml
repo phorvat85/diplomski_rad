@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="SqlDialectMappings">
-    <file url="file://$PROJECT_DIR$/auth-service/src/main/resources/db/migration/V1__init_schema.sql" dialect="GenericSQL" />
-    <file url="file://$PROJECT_DIR$/auth-service/src/main/resources/db/migration/V2__insert_roles.sql" dialect="GenericSQL" />
-    <file url="file://$PROJECT_DIR$/auth-service/src/main/resources/db/migration/V3__insert_admin_user.sql" dialect="GenericSQL" />
-    <file url="file://$PROJECT_DIR$/auth-service/src/main/resources/db/migration/V4__insert_mock_tasks.sql" dialect="GenericSQL" />
+    <file url="file://$PROJECT_DIR$/common/src/main/resources/db/migration/V1__init_schema.sql" dialect="GenericSQL" />
+    <file url="file://$PROJECT_DIR$/common/src/main/resources/db/migration/V2__insert_roles.sql" dialect="GenericSQL" />
+    <file url="file://$PROJECT_DIR$/common/src/main/resources/db/migration/V3__insert_admin_user.sql" dialect="GenericSQL" />
+    <file url="file://$PROJECT_DIR$/common/src/main/resources/db/migration/V4__insert_mock_tasks.sql" dialect="GenericSQL" />
   </component>
 </project>

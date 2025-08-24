@@ -1,8 +1,9 @@
-// src/pages/Profile.tsx
-import { useEffect, useMemo } from 'react'
+// Refactored to use GET /admin/user/me instead of decoding the JWT
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { listUsers } from '../api/users'
+import { api } from '../api/client'
+import type { User } from '../api/users'
 
 const btnPrimary =
   'inline-flex items-center rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-white shadow-sm transition-colors hover:bg-black'
@@ -15,27 +16,7 @@ function getLocalUser() {
     return null
   }
 }
-function getToken(): string | null {
-  return localStorage.getItem('token') || localStorage.getItem('accessToken')
-}
-function decodeJwt(token: string): any | null {
-  try {
-    const [, payload] = token.split('.')
-    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
-    return JSON.parse(json)
-  } catch {
-    return null
-  }
-}
-function normalizeRole(r: any): string {
-  if (!r) return ''
-  if (typeof r === 'string') return r
-  return r.name ?? ''
-}
-function hasAnyRole(role: any, allowed: string[]) {
-  const val = normalizeRole(role).toUpperCase()
-  return allowed.some(a => val === a || val === `ROLE_${a}`)
-}
+
 function roleText(r: any) {
   if (!r) return '—'
   if (typeof r === 'string') return r
@@ -43,65 +24,48 @@ function roleText(r: any) {
 }
 
 export default function Profile() {
-  const localUser = useMemo(() => getLocalUser(), [])
-  const token = useMemo(() => getToken(), [])
-  const canHydrateFromUsers = hasAnyRole(localUser?.role, ['ADMIN', 'MANAGER'])
+  // Kick off with whatever we have locally for instant paint; then hydrate from /admin/user/me
+  const initialUser = getLocalUser() as User | null
 
-  // Hydrate user info without a /me endpoint
-  const { data: hydratedUser, isLoading } = useQuery({
-    queryKey: ['profile-hydrate', localUser?.username],
-    enabled: !!localUser, // only run if we at least have a username
-    queryFn: async () => {
-      // start with local
-      let base: any = { ...(localUser || {}) }
-
-      // 1) try JWT
-      if (token) {
-        const claims = decodeJwt(token)
-        if (claims && typeof claims === 'object') {
-          const fromJwt = {
-            id: claims.id ?? claims.userId ?? claims.uid ?? base.id,
-            username: claims.username ?? claims.sub ?? base.username,
-            email: claims.email ?? base.email,
-            role: claims.role ?? base.role,
-          }
-          base = { ...base, ...fromJwt }
-        }
-      }
-
-      // 2) if admin/manager, look up from users list by username to get id/email exactly
-      if (canHydrateFromUsers && base?.username) {
-        try {
-          const users = await listUsers()
-          const match =
-            users.find((u: any) => String(u.username).toLowerCase() === String(base.username).toLowerCase()) ||
-            null
-          if (match) {
-            base = { ...base, id: match.id ?? base.id, email: match.email ?? base.email, role: match.role ?? base.role }
-          }
-        } catch {
-          // ignore — maybe not authorized; keep what we have
-        }
-      }
-
-      return base
+  const { data: me, isLoading, isError, error } = useQuery({
+    queryKey: ['me'],
+    queryFn: async () => (await api.get<User>('/worker/user/me')).data,
+    // If unauthenticated (401/403), don't retry; for 5xx allow a couple retries
+    retry: (failureCount, err: any) => {
+      const status = err?.response?.status
+      if (status === 401 || status === 403) return false
+      return failureCount < 2
     },
     staleTime: 60_000,
   })
 
-  // Sync improved info back to localStorage for consistency across pages
+  // Sync to localStorage for consistency across pages (e.g., topbar)
   useEffect(() => {
-    if (hydratedUser) {
-      const merged = { ...(localUser || {}), ...hydratedUser }
+    if (me) {
+      const merged = { ...(initialUser || {}), ...me }
       localStorage.setItem('user', JSON.stringify(merged))
     }
-  }, [hydratedUser]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [me])
 
-  if (!localUser && isLoading) {
+  if (isLoading && !initialUser) {
     return <div className="p-4 text-slate-500">Loading…</div>
   }
 
-  const user = hydratedUser || localUser
+  if (isError && !initialUser) {
+    const msg = (error as any)?.response?.status === 401 ? 'You’re not logged in.' : 'Failed to load profile.'
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-slate-100 p-4">
+        <section className="overflow-hidden rounded-xl border bg-white">
+          <div className="flex items-center justify-between border-b bg-slate-50 p-3">
+            <h2 className="text-lg font-semibold">Profile</h2>
+          </div>
+          <div className="p-4 text-slate-600">{msg}</div>
+        </section>
+      </div>
+    )
+  }
+
+  const user = me || initialUser
   if (!user) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-slate-100 p-4">

@@ -1,7 +1,7 @@
 package com.diplomski.auth.controller;
 
-import com.diplomski.auth.entity.UserEntity;
-import com.diplomski.auth.security.DTOs.AuthRequestDTO;
+import com.diplomski.util.entity.UserEntity;
+import com.diplomski.util.security.DTOs.AuthRequestDTO;
 import com.diplomski.auth.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;

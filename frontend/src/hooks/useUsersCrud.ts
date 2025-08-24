@@ -28,14 +28,23 @@ export function useUsersCrud() {
     onMutate: async (payload) => {
       await qc.cancelQueries({ queryKey: ['users'] })
       const prev = qc.getQueryData<UserRow[]>(['users'])
+
       const tempId = `tmp-${Date.now()}`
       const foundRole = roles.find(r => String(r.id) === String(payload.role.id))
+
+      // optimistic defaults match DB defaults
       const optimistic: UserRow = {
-        id: tempId,
+        id: tempId as any,
         username: payload.username,
         email: payload.email,
         role: foundRole ?? payload.role,
+        enabled: true,
+        accountNonExpired: true,
+        credentialsNonExpired: true,
+        accountNonLocked: true,
+        failedLoginAttempts: 0,
       }
+
       qc.setQueryData<UserRow[]>(['users'], (old = []) => [optimistic, ...old])
       return { prev }
     },
@@ -49,13 +58,30 @@ export function useUsersCrud() {
     onMutate: async (payload: any) => {
       await qc.cancelQueries({ queryKey: ['users'] })
       const prev = qc.getQueryData<UserRow[]>(['users'])
+
+      // Find display role for optimistic render
       const displayRole =
         payload?.role?.id != null
           ? (roles.find(r => String(r.id) === String(payload.role.id)) ?? payload.role)
           : payload.role
+
       qc.setQueryData<UserRow[]>(['users'], (old = []) =>
-        old.map(u => (u.id === payload.id ? ({ ...u, ...payload, role: displayRole } as UserRow) : u))
+        old.map(u => {
+          if (u.id !== payload.id) return u
+
+          // If re-enabling: reset failedLoginAttempts optimistically
+          const isReEnabled = (u.enabled === false) && (payload.enabled === true)
+          const nextFailed = isReEnabled ? 0 : (payload.failedLoginAttempts ?? u.failedLoginAttempts)
+
+          return {
+            ...u,
+            ...payload,
+            role: displayRole ?? u.role,
+            failedLoginAttempts: nextFailed,
+          } as UserRow
+        })
       )
+
       return { prev }
     },
     onError: (_e, _p, ctx) => { if (ctx?.prev) qc.setQueryData(['users'], ctx.prev) },

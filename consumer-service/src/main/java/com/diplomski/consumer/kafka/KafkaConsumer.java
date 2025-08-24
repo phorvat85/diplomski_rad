@@ -1,5 +1,6 @@
 package com.diplomski.consumer.kafka;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -7,7 +8,10 @@ import org.springframework.stereotype.Component;
 
 @Log4j2
 @Component
+@RequiredArgsConstructor
 public class KafkaConsumer {
+
+    private final AuthEventHandler authEventHandler;
 
     @KafkaListener(
             topics = "${spring.kafka.topic-name}",
@@ -15,5 +19,6 @@ public class KafkaConsumer {
     )
     public void eventListener(ConsumerRecord<String, UserConsumerRecord> record) {
         log.info("Consumed consumer record: {}", record.toString());
+        authEventHandler.checkEvent(record);
     }
 }

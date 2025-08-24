@@ -1,62 +1,87 @@
-import { useMemo, useState } from 'react'
-import { useUsersCrud } from '../hooks/useUsersCrud'
-import { changePassword } from '../api/auth'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { api } from '../api/client'
+import { useAuth } from '../auth/AuthContext'
 
-const btnSoft    = 'inline-flex items-center rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-slate-800 shadow-sm transition-colors hover:bg-slate-200'
-const btnPrimary = 'inline-flex items-center rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-white shadow-sm transition-colors hover:bg-black'
+const btnSoft =
+  'inline-flex items-center rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5 text-slate-800 shadow-sm transition-colors hover:bg-slate-200'
+const btnPrimary =
+  'inline-flex items-center rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-white shadow-sm transition-colors hover:bg-black'
 
-function getCurrentUser() {
-  try {
-    const raw = localStorage.getItem('user')
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
+// Extractors that never fall back to numeric id
+const pickUsername = (u: any) => {
+  const v = u?.username ?? u?.userName ?? u?.name ?? ''
+  const s = typeof v === 'number' ? '' : String(v).trim()
+  return s && /^\d+$/.test(s) && String(u?.id ?? '') === s ? '' : s
 }
-
-function hasAnyRole(role: any, allowed: string[]) {
-  const val = typeof role === 'string' ? role : role?.name ?? ''
-  const upper = val.toUpperCase()
-  return allowed.some(a => upper === a || upper === `ROLE_${a}`)
-}
+const pickEmail = (u: any) => String(u?.email ?? u?.emailAddress ?? '').trim()
 
 export default function Settings() {
-  const { updateUser, updatingUser } = useUsersCrud()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { user: authUser, updateUser } = useAuth()
 
-  const currentUser = useMemo(() => getCurrentUser(), [])
-  const canAdminUpdate = hasAnyRole(currentUser?.role, ['ADMIN', 'MANAGER'])
+  // Always populate from /worker/user/me
+  const { data: me } = useQuery({
+    queryKey: ['me'],
+    queryFn: async () => (await api.get('/worker/user/me')).data,
+    // ensure it's considered stale right away so refetches happen when needed
+    staleTime: 0,
+    refetchOnMount: 'always',
+    retry: 1,
+  })
 
-  // Edit profile state
-  const [username, setUsername] = useState<string>(currentUser?.username ?? '')
-  const [email, setEmail] = useState<string>(currentUser?.email ?? '')
-  const [profileMsg, setProfileMsg] = useState<string>('')
+  // Form state
+  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
+  const [profileMsg, setProfileMsg] = useState('')
 
-  // Password state
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [repeatPassword, setRepeatPassword] = useState('')
-  const [pwdMsg, setPwdMsg] = useState<string>('')
+  const [pwdMsg, setPwdMsg] = useState('')
+
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [savingPassword, setSavingPassword] = useState(false)
+
+  // Seed when /me changes
+  useEffect(() => {
+    const src = me ?? authUser ?? null
+    if (!src) return
+    setUsername(pickUsername(src))
+    setEmail(pickEmail(src))
+  }, [me, authUser])
 
   const onSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
     setProfileMsg('')
     try {
-      if (!currentUser?.id) throw new Error('Missing current user id.')
-      // Use existing admin update endpoint; adjust if you add a dedicated /me endpoint
-      await new Promise<void>((resolve, reject) => {
-        updateUser(
-          { id: currentUser.id, username, email } as any,
-          // @ts-ignore — TanStack’s mutate can take callbacks if using mutate instead of mutateAsync
-          { onSuccess: resolve, onError: reject }
-        )
+      setSavingProfile(true)
+
+      const id = (me ?? authUser as any)?.id
+      const body: any = { username, email }
+      if (id != null) body.id = id
+
+      await api.put('/worker/user/update/basic', body, {
+        validateStatus: (s) => (s >= 200 && s < 300) || s === 302,
       })
 
-      // keep localStorage in sync for Profile page
-      const updated = { ...currentUser, username, email }
-      localStorage.setItem('user', JSON.stringify(updated))
-      setProfileMsg('Profile saved.')
+      // 1) update in-memory auth user immediately
+      updateUser({ username, email })
+
+      // 2) update React Query cache immediately
+      queryClient.setQueryData(['me'], (old: any) => ({ ...(old ?? {}), username, email }))
+
+      // 3) refetch in the background so Profile shows server-truth too
+      queryClient.invalidateQueries({ queryKey: ['me'] })
+
+      // 4) navigate instantly
+      navigate('/profile', { replace: true })
     } catch (err: any) {
-      setProfileMsg(err?.message || 'Failed to save profile.')
+      setProfileMsg(err?.response?.data?.message || err?.message || 'Failed to save profile.')
+    } finally {
+      setSavingProfile(false)
     }
   }
 
@@ -68,13 +93,23 @@ export default function Settings() {
       return
     }
     try {
-      await changePassword({ currentPassword, newPassword })
-      setPwdMsg('Password updated.')
-      setCurrentPassword('')
-      setNewPassword('')
-      setRepeatPassword('')
+      setSavingPassword(true)
+      const id = (me ?? authUser as any)?.id
+      const body: any = { oldPassword: currentPassword, newPassword }
+      if (id != null) body.id = id
+
+      await api.put('/worker/user/update/password', body, {
+        validateStatus: (s) => (s >= 200 && s < 300) || s === 302,
+      })
+
+      // force a fresh /me fetch in case backend mutates any fields
+      queryClient.invalidateQueries({ queryKey: ['me'] })
+
+      navigate('/profile', { replace: true })
     } catch (err: any) {
-      setPwdMsg(err?.message || 'Failed to change password.')
+      setPwdMsg(err?.response?.data?.message || err?.message || 'Failed to change password.')
+    } finally {
+      setSavingPassword(false)
     }
   }
 
@@ -97,6 +132,7 @@ export default function Settings() {
                       className="w-full rounded border px-3 py-2"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
+                      disabled={savingProfile}
                     />
                   </div>
                   <div className="grid gap-2">
@@ -106,19 +142,18 @@ export default function Settings() {
                       className="w-full rounded border px-3 py-2"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      disabled={savingProfile}
                     />
                   </div>
                 </div>
               </div>
 
               <div className="flex justify-end gap-2">
-                {!canAdminUpdate && (
-                  <span className="self-center text-xs text-slate-500">
-                    Note: saving uses the admin update endpoint. If your backend exposes a /me update, tell me and I’ll wire it.
-                  </span>
-                )}
-                <button className={btnPrimary} disabled={updatingUser}>
-                  {updatingUser ? 'Saving…' : 'Save Profile'}
+                <span className="self-center text-xs text-slate-500">
+                  Saving via <code>/worker/user/update/basic</code>
+                </span>
+                <button className={btnPrimary} disabled={savingProfile}>
+                  {savingProfile ? 'Saving…' : 'Save Profile'}
                 </button>
               </div>
 
@@ -145,6 +180,7 @@ export default function Settings() {
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       autoComplete="current-password"
+                      disabled={savingPassword}
                     />
                   </div>
                   <div className="grid gap-2">
@@ -155,6 +191,7 @@ export default function Settings() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       autoComplete="new-password"
+                      disabled={savingPassword}
                     />
                   </div>
                   <div className="grid gap-2">
@@ -165,16 +202,28 @@ export default function Settings() {
                       value={repeatPassword}
                       onChange={(e) => setRepeatPassword(e.target.value)}
                       autoComplete="new-password"
+                      disabled={savingPassword}
                     />
                   </div>
                 </div>
               </div>
 
               <div className="flex justify-end gap-2">
-                <button className={btnSoft} type="reset" onClick={() => { setCurrentPassword(''); setNewPassword(''); setRepeatPassword(''); }}>
+                <button
+                  className={btnSoft}
+                  type="reset"
+                  onClick={() => {
+                    setCurrentPassword('')
+                    setNewPassword('')
+                    setRepeatPassword('')
+                  }}
+                  disabled={savingPassword}
+                >
                   Clear
                 </button>
-                <button className={btnPrimary} type="submit">Change Password</button>
+                <button className={btnPrimary} type="submit" disabled={savingPassword}>
+                  {savingPassword ? 'Updating…' : 'Change Password'}
+                </button>
               </div>
 
               {!!pwdMsg && <div className="text-sm text-slate-700">{pwdMsg}</div>}

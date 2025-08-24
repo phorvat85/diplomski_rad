@@ -1,11 +1,12 @@
 package com.diplomski.auth.service;
 
-import com.diplomski.auth.entity.UserEntity;
-import com.diplomski.auth.repository.RoleRepository;
-import com.diplomski.auth.repository.UserRepository;
-import com.diplomski.auth.security.DTOs.AuthRequestDTO;
-import com.diplomski.auth.security.DTOs.AuthResponseDTO;
-import com.diplomski.auth.security.JWT.JwtUtil;
+import com.diplomski.util.security.DTOs.AuthRequestDTO;
+import com.diplomski.util.security.DTOs.AuthResponseDTO;
+import com.diplomski.util.security.JWT.JwtUtil;
+import com.diplomski.util.entity.UserEntity;
+import com.diplomski.util.repository.RoleRepository;
+import com.diplomski.util.repository.UserRepository;
+import com.diplomski.util.service.CustomUserDetailsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.apache.kafka.common.errors.AuthenticationException;

@@ -3,7 +3,7 @@ import type { RoleEntity } from '../types/entities'
 
 // Adjust endpoints if your backend differs
 export async function listRoles(): Promise<RoleEntity[]> {
-  const { data } = await api.get<RoleEntity[]>('/admin/role/roles')
+  const { data } = await api.get<RoleEntity[]>('/manager/role/roles')
   return data
 }
 
